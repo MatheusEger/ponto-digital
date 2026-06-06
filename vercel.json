@@ -1,0 +1,6 @@
+{
+  "crons": [
+    { "path": "/api/cron/daily-report", "schedule": "0 2 * * *" },
+    { "path": "/api/cron/overtime-alert", "schedule": "0 1 * * *" }
+  ]
+}
