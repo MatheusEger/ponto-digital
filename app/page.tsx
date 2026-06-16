@@ -16,13 +16,6 @@ type ShiftStatus = {
   canReopen: boolean;
 };
 
-const EVENTS: { type: EventType; label: string; variant?: 'primary' | 'secondary' | 'danger' }[] = [
-  { type: 'ENTRADA', label: 'Entrada', variant: 'primary' },
-  { type: 'INICIO_PAUSA_ALMOCO', label: 'Início Almoço', variant: 'secondary' },
-  { type: 'FIM_PAUSA_ALMOCO', label: 'Fim Almoço', variant: 'secondary' },
-  { type: 'SAIDA', label: 'Saída', variant: 'danger' }
-];
-
 export default function KioskPage() {
   const [view, setView] = useState<'LIST' | 'PIN' | 'DASHBOARD'>('LIST');
   const [employees, setEmployees] = useState<EmployeeSummary[]>([]);
@@ -34,7 +27,6 @@ export default function KioskPage() {
   const [todayRecords, setTodayRecords] = useState<{event_type: string, timestamp: string}[]>([]);
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
 
-  // Atualiza o relógio a cada segundo
   useEffect(() => {
     setCurrentTime(new Date());
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -111,12 +103,43 @@ export default function KioskPage() {
           return;
         }
         
-        toast.success(`${label} registrada com sucesso!`);
+        toast.success(`${label} registrado com sucesso!`);
         setTimeout(resetKiosk, 2000); 
       });
     } finally {
       setBusy(false);
     }
+  }
+
+  // --- LÓGICA INTELIGENTE DE BOTÕES ---
+  function getAvailableActions() {
+    // Conta quantos registros normais (não justificativas) a pessoa já tem hoje
+    const workRecords = todayRecords.filter(r => !['ATESTADO', 'ATRASO', 'FALTA', 'DECLARACAO'].includes(r.event_type));
+    const count = workRecords.length;
+
+    // Regras da jornada Scapinelli: 4 batidas (Entrada 1, Saída 1, Entrada 2, Saída 2)
+    if (count === 0) {
+      return [{ type: 'ENTRADA', label: 'Bater Ponto de Entrada', variant: 'bg-emerald-600 hover:bg-emerald-700' }];
+    }
+    if (count === 1) {
+      return [{ type: 'INICIO_PAUSA_ALMOCO', label: 'Registrar Saída para Almoço', variant: 'bg-amber-500 hover:bg-amber-600' }];
+    }
+    if (count === 2) {
+      return [{ type: 'FIM_PAUSA_ALMOCO', label: 'Registrar Retorno do Almoço', variant: 'bg-emerald-600 hover:bg-emerald-700' }];
+    }
+    if (count === 3) {
+      return [{ type: 'SAIDA', label: 'Encerrar Expediente (Saída)', variant: 'bg-red-500 hover:bg-red-600' }];
+    }
+    
+    // Se a pessoa já fez as 4 batidas normais, habilitamos os botões de Hora Extra
+    if (count >= 4 && count % 2 === 0) {
+      return [{ type: 'ENTRADA_EXTRA', label: 'Iniciar Hora Extra', variant: 'bg-blue-600 hover:bg-blue-700' }];
+    }
+    if (count >= 4 && count % 2 !== 0) {
+      return [{ type: 'SAIDA_EXTRA', label: 'Encerrar Hora Extra', variant: 'bg-red-500 hover:bg-red-600' }];
+    }
+
+    return [];
   }
 
   if (loadingInit) {
@@ -125,7 +148,6 @@ export default function KioskPage() {
 
   return (
     <main className="min-h-screen bg-slate-50 flex flex-col items-center py-10 px-4">
-      {/* Cabeçalho Scapinelli */}
       <div className="w-full max-w-2xl text-center mb-8">
         <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight uppercase">Contábil Scapinelli</h1>
         <p className="text-slate-500 font-medium mt-1 uppercase tracking-widest text-sm">Registro Eletrônico de Ponto</p>
@@ -186,25 +208,24 @@ export default function KioskPage() {
               <form onSubmit={handlePinSubmit} className="space-y-6 px-4">
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-slate-600 block text-center uppercase tracking-wide">Digite seu PIN</label>
-                    <Input 
-                      type="password" 
-                      autoFocus
-                      inputMode="numeric"
-                      value={pin}
-                      onChange={(e) => setPin(e.target.value)}
-                      placeholder="****"
-                      className="h-16 text-center text-3xl tracking-[0.5em] border-2 border-slate-200 focus-visible:ring-0 focus-visible:border-blue-500 rounded-xl"
-                      maxLength={6}
-                      // --- ADICIONE ESTAS PROPRIEDADES ABAIXO ---
-                      autoComplete="off" 
-                      name="pin-ponto"
-                      readOnly={false}
-                      onFocus={(e) => e.target.removeAttribute('readonly')}
-                    />
+                  <Input 
+                    type="password" 
+                    autoFocus
+                    inputMode="numeric"
+                    value={pin}
+                    onChange={(e) => setPin(e.target.value)}
+                    placeholder="****"
+                    className="h-16 text-center text-3xl tracking-[0.5em] border-2 border-slate-200 focus-visible:ring-0 focus-visible:border-blue-500 rounded-xl"
+                    maxLength={6}
+                    autoComplete="off" 
+                    name="pin-ponto"
+                    readOnly={false}
+                    onFocus={(e) => e.target.removeAttribute('readonly')}
+                  />
                 </div>
                 <div className="flex gap-3">
                   <Button type="button" variant="outline" className="w-1/3 h-12 rounded-xl text-slate-600" onClick={resetKiosk}>Voltar</Button>
-                  <Button type="submit" className="w-2/3 h-12 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-lg" disabled={busy || pin.length < 4} loading={busy}>Acessar Ponto</Button>
+                  <Button type="submit" className="w-2/3 h-12 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-lg" disabled={busy || pin.length < 4} loading={busy}>Acessar</Button>
                 </div>
               </form>
             </CardContent>
@@ -213,34 +234,31 @@ export default function KioskPage() {
 
         {view === 'DASHBOARD' && selectedEmp && (
           <Card className="border-0 shadow-lg">
-            <CardHeader className="bg-slate-50 border-b border-slate-100 pb-4">
-              <CardTitle className="text-xl text-slate-800">Registrar Ponto</CardTitle>
-              <p className="text-sm text-slate-500">Logado como: <span className="font-medium text-slate-700">{selectedEmp.name}</span></p>
+            <CardHeader className="bg-slate-50 border-b border-slate-100 pb-4 text-center">
+              <CardTitle className="text-2xl text-slate-800">Pronto, {selectedEmp.name.split(' ')[0]}!</CardTitle>
+              <p className="text-sm text-slate-500">Qual é o seu próximo passo?</p>
             </CardHeader>
-            <CardContent className="space-y-6 pt-6">
-              <div className="grid grid-cols-2 gap-3">
-                {EVENTS.map((ev) => (
+            <CardContent className="space-y-8 pt-6">
+              
+              <div className="flex flex-col gap-3">
+                {getAvailableActions().map((action) => (
                   <Button
-                    key={ev.type}
-                    className={`h-16 font-semibold text-sm rounded-xl shadow-sm transition-all ${
-                      ev.variant === 'primary' ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 
-                      ev.variant === 'danger' ? 'bg-red-500 hover:bg-red-600 text-white' : 
-                      'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
-                    }`}
+                    key={action.type}
+                    className={`h-20 w-full text-xl font-bold rounded-xl shadow-md text-white transition-all transform hover:scale-[1.02] ${action.variant}`}
                     loading={busy}
-                    onClick={() => register(ev.type, ev.label)}
+                    onClick={() => register(action.type as EventType, action.label)}
                   >
-                    {ev.label}
+                    {action.label}
                   </Button>
                 ))}
               </div>
 
-              <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-                <h3 className="text-sm font-bold uppercase tracking-wider mb-3 text-slate-500">Histórico de Hoje</h3>
+              <div className="bg-slate-50 rounded-xl p-5 border border-slate-100 shadow-inner">
+                <h3 className="text-xs font-bold uppercase tracking-wider mb-4 text-slate-400 text-center">Resumo das Suas Batidas Hoje</h3>
                 {todayRecords.length === 0 ? (
-                  <p className="text-sm text-slate-400 italic text-center py-2">Nenhum registro encontrado hoje.</p>
+                  <p className="text-sm text-slate-400 italic text-center py-4">Você ainda não bateu o ponto hoje.</p>
                 ) : (
-                  <ul className="space-y-2">
+                  <ul className="space-y-3">
                     {todayRecords.map((rec, i) => {
                       const horaFormatada = new Intl.DateTimeFormat('pt-BR', { 
                         hour: '2-digit', minute: '2-digit' 
@@ -249,7 +267,7 @@ export default function KioskPage() {
                       return (
                         <li key={i} className="flex justify-between items-center text-sm bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
                           <span className="font-semibold text-slate-700">{rec.event_type.replace(/_/g, ' ')}</span>
-                          <span className="font-mono bg-slate-100 px-2 py-1 rounded text-slate-600">{horaFormatada}</span>
+                          <span className="font-mono bg-slate-100 px-3 py-1 rounded text-slate-600 font-bold">{horaFormatada}</span>
                         </li>
                       );
                     })}
@@ -257,8 +275,8 @@ export default function KioskPage() {
                 )}
               </div>
 
-              <Button variant="ghost" className="w-full text-slate-500 hover:bg-slate-100 h-12 rounded-xl" onClick={resetKiosk}>
-                Encerrar / Sair
+              <Button variant="ghost" className="w-full text-slate-400 hover:bg-slate-100 h-14 rounded-xl" onClick={resetKiosk}>
+                Cancelei, voltar ao início.
               </Button>
             </CardContent>
           </Card>

@@ -22,7 +22,7 @@ async function getKpis() {
 
   const db = getDb();
   const audit = await db.execute({
-    sql: "SELECT COUNT(*) AS c FROM audit_log WHERE action = 'DEVICE_RESET' AND date(created_at) >= date('now', '-7 days')",
+    sql: "SELECT COUNT(*) AS c FROM audit_logs WHERE action = 'DEVICE_RESET' AND date(created_at) >= date('now', '-7 days')",
     args: []
   });
   const deviceResetsLast7d = Number((audit.rows[0] as unknown as { c: number }).c);

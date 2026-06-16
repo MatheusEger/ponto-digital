@@ -3,8 +3,6 @@ import { getDb } from './db';
 import { minutesDiff } from './timezone';
 import type { EmployeeRow, TimeRecordRow } from './queries';
 
-const JORNADA_DIARIA_MINUTOS = 528; // 480 min = 8h
-
 export type BancoHorasEntry = {
   employee: { id: string; name: string; email: string };
   totalWorkedMinutes: number;
@@ -22,7 +20,13 @@ function formatBalance(minutes: number): string {
   return `${sign}${h}h${m.toString().padStart(2, '0')}min`;
 }
 
-// 1. O sistema agora sabe quais eventos LIGAM o cronômetro e quais DESLIGAM
+// Auxiliar para converter "HH:mm" em minutos
+function timeToMinutes(timeStr: string): number {
+  if (!timeStr) return 0;
+  const [h, m] = timeStr.split(':').map(Number);
+  return (h * 60) + (m || 0);
+}
+
 const IN_EVENTS = ['ENTRADA', 'FIM_PAUSA_ALMOCO', 'FIM_PAUSA_JANTA', 'ENTRADA_EXTRA'];
 const OUT_EVENTS = ['SAIDA', 'INICIO_PAUSA_ALMOCO', 'INICIO_PAUSA_JANTA', 'SAIDA_EXTRA'];
 
@@ -30,21 +34,19 @@ function computeWorkedMinutesForDay(records: TimeRecordRow[]): number {
   let workedMinutes = 0;
   let lastInTime: string | null = null;
 
-  // 2. Ordena os registros do dia cronologicamente para garantir a sequência
   const sorted = [...records].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
   for (const rec of sorted) {
     if (IN_EVENTS.includes(rec.event_type)) {
       if (!lastInTime) {
-        lastInTime = rec.timestamp; // Inicia a contagem de tempo
+        lastInTime = rec.timestamp;
       }
     } else if (OUT_EVENTS.includes(rec.event_type)) {
       if (lastInTime) {
-        workedMinutes += minutesDiff(lastInTime, rec.timestamp); // Adiciona o tempo trabalhado
-        lastInTime = null; // Pausa o cronômetro
+        workedMinutes += minutesDiff(lastInTime, rec.timestamp);
+        lastInTime = null;
       }
     }
-    // Eventos como ATESTADO e ATRASO são ignorados pelo cronômetro automaticamente
   }
 
   return Math.max(0, workedMinutes);
@@ -52,6 +54,26 @@ function computeWorkedMinutesForDay(records: TimeRecordRow[]): number {
 
 export async function computeBancoHoras(employees: EmployeeRow[]): Promise<BancoHorasEntry[]> {
   const db = getDb();
+  
+  // 1. Busca as configurações de jornada no banco de dados
+  const confRes = await db.execute("SELECT * FROM admin_config WHERE id = 'singleton'");
+  let configRow: any = {};
+  if (confRes.rows.length > 0) {
+    configRow = confRes.rows[0];
+  }
+
+  // 2. Extrai os dados e calcula a jornada diária padrão dinamicamente
+  const entradaManha = configRow.entrada_manha ?? '07:30';
+  const saidaAlmoco = configRow.saida_almoco ?? '11:48';
+  const retornoAlmoco = configRow.retorno_almoco ?? '13:30';
+  const saidaTarde = configRow.saida_tarde ?? '18:00';
+  const trabalhaSabado = Boolean(configRow.trabalha_sabado);
+  const trabalhaDomingo = Boolean(configRow.trabalha_domingo);
+
+  const morningWork = timeToMinutes(saidaAlmoco) - timeToMinutes(entradaManha);
+  const afternoonWork = timeToMinutes(saidaTarde) - timeToMinutes(retornoAlmoco);
+  const STANDARD_JORNADA_MINUTES = Math.max(0, morningWork) + Math.max(0, afternoonWork);
+
   const results: BancoHorasEntry[] = [];
 
   for (const emp of employees) {
@@ -84,20 +106,29 @@ export async function computeBancoHoras(employees: EmployeeRow[]): Promise<Banco
     }
 
     let totalWorked = 0;
+    let expectedMinutes = 0;
     let daysWorked = 0;
 
-    for (const [, dayRecords] of byDay) {
-      // 3. Só conta como "dia trabalhado" (que cobra 8h de dívida) se houver batida de ponto
-      // Se for um dia só com ATESTADO, o funcionário não fica devendo 8h.
+    for (const [day, dayRecords] of byDay) {
       const hasWorkEvent = dayRecords.some(r => IN_EVENTS.includes(r.event_type) || OUT_EVENTS.includes(r.event_type));
-      
       if (!hasWorkEvent) continue;
 
       daysWorked++;
       totalWorked += computeWorkedMinutesForDay(dayRecords);
+
+      // 3. Verifica o dia da semana (Domingo = 0, Sábado = 6)
+      const dt = new Date(`${day}T12:00:00Z`);
+      const dow = dt.getUTCDay();
+
+      let dayExpected = STANDARD_JORNADA_MINUTES;
+
+      // 4. Zera a cobrança se for final de semana e o escritório não trabalhar
+      if (dow === 6 && !trabalhaSabado) dayExpected = 0;
+      if (dow === 0 && !trabalhaDomingo) dayExpected = 0;
+
+      expectedMinutes += dayExpected;
     }
 
-    const expectedMinutes = daysWorked * JORNADA_DIARIA_MINUTOS;
     const balance = totalWorked - expectedMinutes;
 
     results.push({
