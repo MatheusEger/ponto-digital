@@ -31,9 +31,11 @@ export default function AdminLoginPage() {
 function LoginForm() {
   const params = useSearchParams();
   const [password, setPassword] = useState('');
-  const [captcha, setCaptcha] = useState(() => generateCaptcha());
+  // 1. Iniciamos com um valor estático provisório
+  const [captcha, setCaptcha] = useState({ question: '...', answer: 0 }); 
   const [captchaInput, setCaptchaInput] = useState('');
   const [busy, setBusy] = useState(false);
+  const [mounted, setMounted] = useState(false); // 2. Controle de carregamento (hidratação)
 
   const refreshCaptcha = useCallback(() => {
     setCaptcha(generateCaptcha());
@@ -42,6 +44,7 @@ function LoginForm() {
 
   useEffect(() => {
     refreshCaptcha();
+    setMounted(true); // Marca que o navegador terminou de carregar
   }, [refreshCaptcha]);
 
   async function submit(e: React.FormEvent) {
@@ -75,6 +78,9 @@ function LoginForm() {
       setBusy(false);
     }
   }
+
+  // 3. Só exibe o formulário quando o navegador e o servidor estiverem sincronizados
+  if (!mounted) return null; 
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md items-center justify-center p-4">

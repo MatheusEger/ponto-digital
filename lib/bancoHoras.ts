@@ -3,7 +3,7 @@ import { getDb } from './db';
 import { minutesDiff } from './timezone';
 import type { EmployeeRow, TimeRecordRow } from './queries';
 
-const JORNADA_DIARIA_MINUTOS = 8 * 60; // 480 min = 8h
+const JORNADA_DIARIA_MINUTOS = 528; // 480 min = 8h
 
 export type BancoHorasEntry = {
   employee: { id: string; name: string; email: string };
@@ -22,29 +22,32 @@ function formatBalance(minutes: number): string {
   return `${sign}${h}h${m.toString().padStart(2, '0')}min`;
 }
 
+// 1. O sistema agora sabe quais eventos LIGAM o cronômetro e quais DESLIGAM
+const IN_EVENTS = ['ENTRADA', 'FIM_PAUSA_ALMOCO', 'FIM_PAUSA_JANTA', 'ENTRADA_EXTRA'];
+const OUT_EVENTS = ['SAIDA', 'INICIO_PAUSA_ALMOCO', 'INICIO_PAUSA_JANTA', 'SAIDA_EXTRA'];
+
 function computeWorkedMinutesForDay(records: TimeRecordRow[]): number {
-  const events: Record<string, TimeRecordRow | undefined> = {};
-  for (const r of records) events[r.event_type] = r;
+  let workedMinutes = 0;
+  let lastInTime: string | null = null;
 
-  const entrada = events['ENTRADA'];
-  const saida = events['SAIDA'];
-  if (!entrada || !saida) return 0;
+  // 2. Ordena os registros do dia cronologicamente para garantir a sequência
+  const sorted = [...records].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
-  let worked = minutesDiff(entrada.timestamp, saida.timestamp);
+  for (const rec of sorted) {
+    if (IN_EVENTS.includes(rec.event_type)) {
+      if (!lastInTime) {
+        lastInTime = rec.timestamp; // Inicia a contagem de tempo
+      }
+    } else if (OUT_EVENTS.includes(rec.event_type)) {
+      if (lastInTime) {
+        workedMinutes += minutesDiff(lastInTime, rec.timestamp); // Adiciona o tempo trabalhado
+        lastInTime = null; // Pausa o cronômetro
+      }
+    }
+    // Eventos como ATESTADO e ATRASO são ignorados pelo cronômetro automaticamente
+  }
 
-  const lunchStart = events['INICIO_PAUSA_ALMOCO'];
-  const lunchEnd = events['FIM_PAUSA_ALMOCO'];
-  if (lunchStart && lunchEnd) worked -= minutesDiff(lunchStart.timestamp, lunchEnd.timestamp);
-
-  const dinnerStart = events['INICIO_PAUSA_JANTA'];
-  const dinnerEnd = events['FIM_PAUSA_JANTA'];
-  if (dinnerStart && dinnerEnd) worked -= minutesDiff(dinnerStart.timestamp, dinnerEnd.timestamp);
-
-  const entradaExtra = events['ENTRADA_EXTRA'];
-  const saidaExtra = events['SAIDA_EXTRA'];
-  if (entradaExtra && saidaExtra) worked += minutesDiff(entradaExtra.timestamp, saidaExtra.timestamp);
-
-  return Math.max(0, worked);
+  return Math.max(0, workedMinutes);
 }
 
 export async function computeBancoHoras(employees: EmployeeRow[]): Promise<BancoHorasEntry[]> {
@@ -84,9 +87,11 @@ export async function computeBancoHoras(employees: EmployeeRow[]): Promise<Banco
     let daysWorked = 0;
 
     for (const [, dayRecords] of byDay) {
-      const hasEntrada = dayRecords.some((r) => r.event_type === 'ENTRADA');
-      const hasSaida = dayRecords.some((r) => r.event_type === 'SAIDA');
-      if (!hasEntrada || !hasSaida) continue;
+      // 3. Só conta como "dia trabalhado" (que cobra 8h de dívida) se houver batida de ponto
+      // Se for um dia só com ATESTADO, o funcionário não fica devendo 8h.
+      const hasWorkEvent = dayRecords.some(r => IN_EVENTS.includes(r.event_type) || OUT_EVENTS.includes(r.event_type));
+      
+      if (!hasWorkEvent) continue;
 
       daysWorked++;
       totalWorked += computeWorkedMinutesForDay(dayRecords);

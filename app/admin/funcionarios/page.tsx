@@ -33,7 +33,9 @@ export default function FuncionariosPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Employee | null>(null);
-  const [form, setForm] = useState({ name: '', phone: '', email: '', active: true });
+  
+  // Adicionado pinPonto e senhaWeb no estado do formulário
+  const [form, setForm] = useState({ name: '', phone: '', email: '', active: true, pinPonto: '', senhaWeb: '' });
   const [busy, setBusy] = useState(false);
 
   async function load() {
@@ -53,13 +55,15 @@ export default function FuncionariosPage() {
 
   function openCreate() {
     setEditing(null);
-    setForm({ name: '', phone: '', email: '', active: true });
+    setForm({ name: '', phone: '', email: '', active: true, pinPonto: '', senhaWeb: '' });
     setShowForm(true);
   }
 
   function openEdit(emp: Employee) {
     setEditing(emp);
-    setForm({ name: emp.name, phone: emp.phone, email: emp.email, active: emp.active === 1 });
+    // Ao editar, deixamos as senhas em branco para não expor a atual.
+    // O backend deve ignorar esses campos se vierem vazios na atualização.
+    setForm({ name: emp.name, phone: emp.phone, email: emp.email, active: emp.active === 1, pinPonto: '', senhaWeb: '' });
     setShowForm(true);
   }
 
@@ -103,8 +107,10 @@ export default function FuncionariosPage() {
     });
   }
 
+  // Com a remoção da lógica de device_hash e entrada do PIN, a função de resetDevice pode até ser removida no futuro,
+  // mas vamos mantê-la aqui por segurança, caso decida reutilizar a estrutura.
   async function resetDevice(emp: Employee) {
-    if (!confirm(`Resetar o dispositivo vinculado de ${emp.name}? O funcionário precisará refazer o primeiro acesso.`)) return;
+    if (!confirm(`Resetar o dispositivo vinculado de ${emp.name}?`)) return;
     await withLoading('Resetando...', async () => {
       const res = await fetch(`/api/employees/${emp.id}/reset-device`, { method: 'POST' });
       if (res.ok) {
@@ -138,7 +144,6 @@ export default function FuncionariosPage() {
                     <th className="p-3">Email</th>
                     <th className="p-3">Telefone</th>
                     <th className="p-3">Status</th>
-                    <th className="p-3">Device</th>
                     <th className="p-3 text-right">Ações</th>
                   </tr>
                 </thead>
@@ -152,30 +157,16 @@ export default function FuncionariosPage() {
                         </a>
                       </td>
                       <td className="p-3">
-                        <a href={`https://wa.me/+55${emp.phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-green-600 hover:underline">
-                          {emp.phone}
-                        </a>
+                        <a href={`https://wa.me/+55${(emp.phone || '').replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-green-600 hover:underline">                        </a>
                       </td>
                       <td className="p-3">
                         {emp.active === 1 ? <Badge tone="success">Ativo</Badge> : <Badge tone="neutral">Inativo</Badge>}
-                      </td>
-                      <td className="p-3">
-                        {emp.device_hash ? (
-                          <Badge tone="info">vinculado</Badge>
-                        ) : (
-                          <Badge tone="warning">não vinculado</Badge>
-                        )}
                       </td>
                       <td className="p-3">
                         <div className="flex justify-end gap-2">
                           <Button size="sm" variant="outline" onClick={() => openEdit(emp)}>
                             Editar
                           </Button>
-                          {emp.device_hash && (
-                            <Button size="sm" variant="outline" onClick={() => resetDevice(emp)}>
-                              Resetar device
-                            </Button>
-                          )}
                           <Button size="sm" variant="danger" onClick={() => remove(emp)}>
                             Excluir
                           </Button>
@@ -196,22 +187,49 @@ export default function FuncionariosPage() {
           <Field label="Nome">
             <Input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </Field>
-          <Field label="Email">
-            <Input
-              type="email"
-              required
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-            />
-          </Field>
-          <Field label="Telefone" hint="Formato (XX) XXXXX-XXXX">
-            <Input
-              required
-              value={form.phone}
-              onChange={(e) => setForm({ ...form, phone: maskPhone(e.target.value) })}
-              placeholder="(11) 91234-5678"
-            />
-          </Field>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Email">
+              <Input
+                type="email"
+                required
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+              />
+            </Field>
+            <Field label="Telefone" hint="Formato (XX) XXXXX-XXXX">
+              <Input
+                required
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: maskPhone(e.target.value) })}
+                placeholder="(11) 91234-5678"
+              />
+            </Field>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="PIN do Ponto" hint={editing ? "Deixe em branco para não alterar" : "4 a 6 dígitos (Numérico)"}>
+              <Input
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                required={!editing} // Só é obrigatório na criação
+                value={form.pinPonto}
+                onChange={(e) => setForm({ ...form, pinPonto: e.target.value.replace(/\D/g, '') })}
+                placeholder="Ex: 1234"
+              />
+            </Field>
+            <Field label="Senha de Acesso Web" hint={editing ? "Deixe em branco para não alterar" : "Acesso ao painel do funcionário"}>
+              <Input
+                type="password"
+                required={!editing} // Só é obrigatório na criação
+                value={form.senhaWeb}
+                onChange={(e) => setForm({ ...form, senhaWeb: e.target.value })}
+                placeholder="*******"
+              />
+            </Field>
+          </div>
+
           <label className="inline-flex items-center gap-2 text-sm">
             <input
               type="checkbox"

@@ -52,6 +52,8 @@ export function computeDailyRows(employees: EmployeeRow[], records: TimeRecordRo
   }
 
   const rows: DailyRow[] = [];
+  const JORNADA_ESPERADA = 528; // Nova jornada: 8h48min = 528 minutos
+
   for (const emp of employees) {
     const recs = byEmp.get(emp.id) ?? [];
     if (recs.length === 0) continue;
@@ -86,10 +88,19 @@ export function computeDailyRows(employees: EmployeeRow[], records: TimeRecordRo
     if (!dinnerStart && dinnerEnd) anomalies.push('Fim de janta sem início');
     if (entradaExtra && !saidaExtra) anomalies.push('Período extra sem encerramento');
 
+    // NOVA LÓGICA DE VALIDAÇÃO DE CARGA HORÁRIA:
+    // Só verifica se houve trabalho parcial, ignorando dias em que o funcionário não foi (0 min)
+    if (workedMinutes > 0 && workedMinutes < JORNADA_ESPERADA) {
+      const horasTrabalhadas = (workedMinutes / 60).toFixed(1);
+      const horasEsperadas = (JORNADA_ESPERADA / 60).toFixed(1);
+      anomalies.push(`Carga horária incompleta (${horasTrabalhadas}h de ${horasEsperadas}h)`);
+    }
+
     rows.push({ employee: emp, events, workedMinutes: Math.max(0, workedMinutes), anomalies });
   }
   return rows;
 }
+
 
 function fmtTime(r?: TimeRecordRow): string {
   if (!r) return '—';

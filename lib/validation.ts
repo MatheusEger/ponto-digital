@@ -20,13 +20,24 @@ export const phoneSchema = z
   .regex(/^\(\d{2}\) \d{4,5}-\d{4}$/, 'Telefone deve estar no formato (XX) XXXXX-XXXX');
 
 export const employeeCreateSchema = z.object({
-  name: z.string().trim().min(2).max(120),
-  phone: phoneSchema,
-  email: z.string().trim().toLowerCase().email(),
-  active: z.boolean().optional().default(true)
+  name: z.string().min(3, 'Nome muito curto'),
+  phone: z.string().min(10, 'Telefone inválido'),
+  email: z.string().email('Email inválido'),
+  active: z.boolean().default(true),
+  // Novos campos obrigatórios na criação:
+  pinPonto: z.string().min(4, 'Mínimo de 4 dígitos').max(6, 'Máximo de 6 dígitos'),
+  senhaWeb: z.string().min(6, 'A senha web deve ter no mínimo 6 caracteres'),
 });
 
-export const employeeUpdateSchema = employeeCreateSchema.partial();
+export const employeeUpdateSchema = z.object({
+  name: z.string().min(3, 'Nome muito curto'),
+  phone: z.string().min(10, 'Telefone inválido'),
+  email: z.string().email('Email inválido'),
+  active: z.boolean(),
+  // Novos campos opcionais na edição (se vier vazio, não altera):
+  pinPonto: z.string().max(6).optional().or(z.literal('')),
+  senhaWeb: z.string().optional().or(z.literal('')),
+});
 
 export const pontoSchema = z.object({
   eventType: z.enum(EVENT_TYPES),

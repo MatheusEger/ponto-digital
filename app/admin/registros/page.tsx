@@ -19,6 +19,9 @@ type Record = {
   ip: string;
   user_agent: string;
   device_hash: string;
+  anexo_justificativa?: string | null;
+  observacao?: string | null;
+  horario_editado?: number;
 };
 
 type Employee = { id: string; name: string };
@@ -65,7 +68,15 @@ export default function RegistrosPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Registros</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Registros</h1>
+        <Button 
+          onClick={() => window.open('/api/admin/relatorios/excel', '_blank')}
+          className="bg-green-600 hover:bg-green-700 text-white"
+        >
+          📊 Baixar Excel Completo
+        </Button>
+      </div>
 
       <Card>
         <CardContent className="space-y-3">
@@ -107,20 +118,40 @@ export default function RegistrosPage() {
                     <th className="p-3">Data/Hora</th>
                     <th className="p-3">Funcionário</th>
                     <th className="p-3">Evento</th>
-                    <th className="p-3">IP</th>
-                    <th className="p-3">Device</th>
+                    <th className="p-3">Observação</th>
+                    <th className="p-3">Anexo</th>
+                    <th className="p-3">Status</th>
                   </tr>
                 </thead>
                 <tbody>
                   {records.map((r) => (
                     <tr key={r.id} className="border-t border-slate-200">
                       <td className="p-3 whitespace-nowrap">{formatInTz(r.timestamp)}</td>
-                      <td className="p-3">{r.employee_name ?? '(desconhecido)'}</td>
+                      <td className="p-3 font-medium">{r.employee_name ?? '(desconhecido)'}</td>
                       <td className="p-3">
-                        <Badge tone="info">{r.event_type}</Badge>
+                        <Badge tone={['ATESTADO', 'ATRASO', 'FALTA'].includes(r.event_type) ? 'warning' : 'info'}>
+                          {r.event_type.replace(/_/g, ' ')}
+                        </Badge>
                       </td>
-                      <td className="p-3 font-mono text-xs">{r.ip}</td>
-                      <td className="p-3 font-mono text-xs">{r.device_hash.slice(0, 10)}…</td>
+                      <td className="p-3 text-slate-600 max-w-[200px] truncate" title={r.observacao || ''}>
+                        {r.observacao || '-'}
+                      </td>
+                      <td className="p-3">
+                        {r.anexo_justificativa ? (
+                          <a href={r.anexo_justificativa} target="_blank" className="text-blue-600 font-bold hover:underline">
+                            📎 Ver
+                          </a>
+                        ) : (
+                          '-'
+                        )}
+                      </td>
+                      <td className="p-3">
+                        {r.horario_editado === 1 ? (
+                          <Badge tone="neutral">Editado</Badge>
+                        ) : (
+                          <span className="text-slate-400">-</span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

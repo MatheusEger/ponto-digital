@@ -1,37 +1,41 @@
 // middleware.ts
-import { NextResponse, type NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
 
-const ADMIN_COOKIE = 'pd_admin';
+export async function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl;
+  const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'chave-secreta-padrao-aqui');
 
-async function isAdminJwtValid(token: string | undefined): Promise<boolean> {
-  if (!token) return false;
-  const secret = process.env.JWT_SECRET;
-  if (!secret || secret.length < 32) return false;
-  try {
-    const { payload } = await jwtVerify(token, new TextEncoder().encode(secret));
-    return payload.role === 'admin';
-  } catch {
-    return false;
+  // 1. Proteção das rotas do Administrador
+  if (pathname.startsWith('/admin')) {
+    if (pathname === '/admin/login') return NextResponse.next();
+    
+    // CORRIGIDO: O nome do cookie que a sua API gera é 'pd_admin'
+    const token = req.cookies.get('pd_admin')?.value; 
+    
+    if (!token) return NextResponse.redirect(new URL('/admin/login', req.url));
+    try {
+      await jwtVerify(token, secret);
+    } catch {
+      return NextResponse.redirect(new URL('/admin/login', req.url));
+    }
   }
-}
 
-export async function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-  if (!pathname.startsWith('/admin')) return NextResponse.next();
-  if (pathname === '/admin/login') return NextResponse.next();
-
-  const token = request.cookies.get(ADMIN_COOKIE)?.value;
-  const ok = await isAdminJwtValid(token);
-  if (!ok) {
-    const url = request.nextUrl.clone();
-    url.pathname = '/admin/login';
-    url.searchParams.set('next', pathname);
-    return NextResponse.redirect(url);
+  // 2. Proteção do Portal do Funcionário
+  if (pathname.startsWith('/portal/dashboard')) {
+    const token = req.cookies.get('portal_token')?.value;
+    if (!token) return NextResponse.redirect(new URL('/portal/login', req.url));
+    try {
+      await jwtVerify(token, secret);
+    } catch {
+      return NextResponse.redirect(new URL('/portal/login', req.url));
+    }
   }
+
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ['/admin/:path*']
+  matcher: ['/admin/:path*', '/portal/dashboard/:path*']
 };

@@ -34,7 +34,7 @@ export function AdminNav() {
       <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
         <Link href="/admin/dashboard" className="flex items-center gap-1.5 text-lg font-bold text-brand-700">
           <img src="/icon.png" alt="" className="h-5 w-5" />
-          Ponto Digital
+          Ponto Digital - Contábil Scapinelli
         </Link>
         <nav className="flex flex-wrap gap-1">
           {links.map((l) => {

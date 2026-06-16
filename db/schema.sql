@@ -6,9 +6,13 @@ CREATE TABLE IF NOT EXISTS employees (
   email TEXT UNIQUE NOT NULL,
   active INTEGER NOT NULL DEFAULT 1,
   device_hash TEXT UNIQUE,
+  pin_ponto TEXT,          -- COLUNA NOVA ADICIONADA
+  senha_web_hash TEXT,     -- COLUNA NOVA ADICIONADA
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE INDEX IF NOT EXISTS idx_employees_active ON employees(active);
+
 CREATE INDEX IF NOT EXISTS idx_employees_active ON employees(active);
 
 CREATE TABLE IF NOT EXISTS time_records (
@@ -17,13 +21,18 @@ CREATE TABLE IF NOT EXISTS time_records (
   event_type TEXT NOT NULL CHECK (event_type IN (
     'ENTRADA','INICIO_PAUSA_ALMOCO','FIM_PAUSA_ALMOCO',
     'INICIO_PAUSA_JANTA','FIM_PAUSA_JANTA','SAIDA',
-    'ENTRADA_EXTRA','SAIDA_EXTRA'
+    'ENTRADA_EXTRA','SAIDA_EXTRA', 
+    'ATESTADO', 'DECLARACAO', 'ATRASO', 'FALTA'
   )),
   timestamp TEXT NOT NULL DEFAULT (datetime('now')),
   ip TEXT NOT NULL,
   user_agent TEXT NOT NULL,
-  device_hash TEXT NOT NULL
+  device_hash TEXT NOT NULL,
+  anexo_justificativa TEXT,
+  horario_editado INTEGER NOT NULL DEFAULT 0,
+  observacao TEXT
 );
+
 CREATE INDEX IF NOT EXISTS idx_records_employee_time ON time_records(employee_id, timestamp);
 CREATE INDEX IF NOT EXISTS idx_records_time ON time_records(timestamp);
 

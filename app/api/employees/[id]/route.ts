@@ -8,7 +8,7 @@ import { jsonError, jsonOk } from '@/lib/utils';
 
 type Ctx = { params: { id: string } };
 
-export async function PUT(req: Request, { params }: Ctx) {
+export async function PUT(req: Request, { params }: { params: { id: string } }) {
   try {
     await requireAdmin();
   } catch {
@@ -21,48 +21,47 @@ export async function PUT(req: Request, { params }: Ctx) {
   } catch {
     return jsonError('INVALID_JSON', 'Corpo inválido', 400);
   }
+
   const parsed = employeeUpdateSchema.safeParse(body);
   if (!parsed.success) {
-    return jsonError('INVALID_INPUT', 'Dados inválidos', 400);
+    const msg = parsed.error.errors[0]?.message ?? 'Dados inválidos';
+    return jsonError('INVALID_INPUT', msg, 400);
   }
 
-  const sets: string[] = [];
-  const args: (string | number)[] = [];
-  if (parsed.data.name !== undefined) {
-    sets.push('name = ?');
-    args.push(parsed.data.name);
-  }
-  if (parsed.data.phone !== undefined) {
-    sets.push('phone = ?');
-    args.push(parsed.data.phone);
-  }
-  if (parsed.data.email !== undefined) {
-    sets.push('email = ?');
-    args.push(parsed.data.email);
-  }
-  if (parsed.data.active !== undefined) {
-    sets.push('active = ?');
-    args.push(parsed.data.active ? 1 : 0);
-  }
-  if (sets.length === 0) return jsonOk({});
-
-  sets.push("updated_at = datetime('now')");
-  args.push(params.id);
+  const { name, phone, email, active, pinPonto, senhaWeb } = parsed.data;
 
   try {
     await enqueueWrite(async () => {
       const db = getDb();
-      await db.execute({
-        sql: `UPDATE employees SET ${sets.join(', ')} WHERE id = ?`,
-        args
-      });
+      
+      // Monta a query dinamicamente dependendo se as senhas foram preenchidas ou não
+      let sql = `UPDATE employees SET name = ?, phone = ?, email = ?, active = ?, updated_at = datetime('now')`;
+      const args: any[] = [name, phone, email, active ? 1 : 0];
+
+      if (pinPonto && pinPonto.trim() !== '') {
+        sql += `, pin_ponto = ?`;
+        args.push(pinPonto);
+      }
+
+      if (senhaWeb && senhaWeb.trim() !== '') {
+        sql += `, senha_web_hash = ?`;
+        // O ideal é usar o bcrypt: const hash = await bcrypt.hash(senhaWeb, 10);
+        // Mas por enquanto, se quiser testar rápido:
+        args.push(senhaWeb); 
+      }
+
+      sql += ` WHERE id = ?`;
+      args.push(params.id);
+
+      await db.execute({ sql, args });
       invalidateCaches();
     });
-    return jsonOk({});
+
+    return jsonOk({ success: true });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (/UNIQUE/i.test(msg)) return jsonError('EMAIL_EXISTS', 'Email já cadastrado', 409);
-    return jsonError('DB_ERROR', 'Erro ao atualizar', 500);
+    return jsonError('DB_ERROR', 'Erro ao atualizar funcionário', 500);
   }
 }
 

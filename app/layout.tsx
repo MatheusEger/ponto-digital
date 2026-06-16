@@ -5,8 +5,8 @@ import { Toaster } from 'sonner';
 import { GlobalSpinner } from '@/components/ui/spinner';
 
 export const metadata: Metadata = {
-  title: 'Ponto Digital',
-  description: 'Registro eletrônico de ponto para home office',
+  title: 'Ponto Digital - Contábil Scapinelli',
+  description: 'Registro eletrônico de ponto para empresas de contabilidade',
   robots: 'noindex, nofollow'
 };
 
@@ -24,21 +24,21 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <footer className="border-t border-slate-200 bg-white py-3 text-center text-xs text-slate-500">
           por{' '}
           <a
-            href="mailto:aryribeiro@gmail.com"
+            href="suporte@contabilscapinelli.com.br"
             target="_blank"
             rel="noopener noreferrer"
             className="hover:text-brand-700 hover:underline"
           >
-            Ary Ribeiro
+            Matheus Eger
           </a>{' '}
           |{' '}
           <a
-            href="https://www.linkedin.com/in/aryribeiro"
+            href="https://www.contabilscapinelli.com.br"
             target="_blank"
             rel="noopener noreferrer"
             className="hover:text-brand-700 hover:underline"
           >
-            LinkedIn
+            Contábil Scapinelli
           </a>
         </footer>
         <GlobalSpinner />
